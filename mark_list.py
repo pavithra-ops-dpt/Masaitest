@@ -27,7 +27,7 @@ else:
             grade = "C"
     else:
         status = "Fail"
-        grade = "F" # Assign a grade for failing status if desired
+    
 
 
 print(f"Student name: {student_Name}")
