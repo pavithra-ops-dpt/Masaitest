@@ -1,0 +1,241 @@
+import pandas as pd
+import os
+from datetime import datetime
+
+# Get today's date in the correct format for the filename
+today_date = datetime.now().strftime('%Y%m%d')
+file_path = f"data/trends_{today_date}.json"
+if not os.path.exists(file_path):
+    print(f"Error: File {file_path} not found. Please ensure data collection ran successfully.")
+    
+    file_path = "data/trends_20260406.json" 
+    if not os.path.exists(file_path):
+        print(f"Error: Fallback file {file_path} also not found.")
+        df = pd.DataFrame() 
+    else:
+        df = pd.read_json(file_path)
+else:
+    df = pd.read_json(file_path)
+
+
+
+
+print("Loaded rows:", len(df))
+df.drop_duplicates(subset="post_id", inplace=True)
+df.dropna(subset=["post_id", "title", "score"], inplace=True)
+df["score"] = df["score"].astype(int)
+df["num_comments"] = df["num_comments"].fillna(0).astype(int)
+df = df[df["score"] >= 5]
+df["title"] = df["title"].str.strip()
+print("After removing duplicates:", len(df))
+df.to_csv("data/trends_clean.csv", index=False)
+print(df["category"].value_counts())
+
+
+
+import requests
+import time
+import json
+import os
+from datetime import datetime
+
+
+TOP_URL = "https://hacker-news.firebaseio.com/v0/topstories.json"
+ITEM_URL = "https://hacker-news.firebaseio.com/v0/item/{}.json"
+
+
+HEADERS = {"User-Agent": "TrendPulse/1.0"}
+
+
+CATEGORIES = {
+    "technology": ["ai", "software", "tech", "code", "computer", "data", "cloud", "api", "gpu", "llm"],
+    "worldnews": ["war", "government", "country", "president", "election", "climate", "attack", "global"],
+    "sports": ["nfl", "nba", "fifa", "sport", "game", "team", "player", "league", "championship"],
+    "science": ["research", "study", "space", "physics", "biology", "discovery", "nasa", "genome"],
+    "entertainment": ["movie", "film", "music", "netflix", "game", "book", "show", "award", "streaming"],
+}
+
+
+def get_category(title):
+    if not title:
+        return None
+    t = title.lower()
+    for cat, words in CATEGORIES.items():
+        for w in words:
+            if w in t:
+                return cat
+    return None
+
+
+def get_story(story_id):
+    try:
+        url = ITEM_URL.format(story_id)
+        
+        r = requests.get(url, headers=HEADERS)
+        if r.status_code == 200:
+            return r.json()
+    except:
+        pass
+    return None
+
+
+def main():
+    
+    try:
+        r = requests.get(TOP_URL, headers=HEADERS)
+        top_ids = r.json()[:100]
+    except:
+        print("Error getting top story IDs")
+        return
+
+    results = []
+    count_per_cat = {c: 0 for c in CATEGORIES}
+    
+
+    
+    for cat in CATEGORIES:
+        time.sleep(2)  
+
+        for sid in top_ids:
+            if count_per_cat[cat] >= 25:
+                break
+
+            story = get_story(sid)
+            if not story:
+                continue
+
+            title = story.get("title", "")
+            detected = get_category(title)
+
+            if detected == cat:
+                item = {
+                    "post_id": story.get("id"),
+                    "title": title,
+                    "category": cat,
+                    "score": story.get("score"),
+                    "num_comments": story.get("descendants"),
+                    "author": story.get("by"),
+                    "collected_at": datetime.now().isoformat()
+                }
+                results.append(item)
+                count_per_cat[cat] += 1
+
+    
+    os.makedirs("data", exist_ok=True)
+    fname = "data/trends_" + datetime.now().strftime("%Y%m%d") + ".json"
+
+    with open(fname, "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"Saved to: {fname}")
+    print("Total stories collected:", len(results))
+
+main()
+
+
+
+
+
+
+import numpy as np
+
+df["category"].value_counts()
+#print(df["category"].value_counts())
+idx = df["num_comments"].idxmax()
+df.loc[idx, "title"]
+df.loc[idx, "num_comments"]
+
+print("Most commented story title:", df.loc[idx, "title"])
+print("Number of comments:", df.loc[idx, "num_comments"])
+
+df["engagement"] = df["num_comments"] / (df["score"] + 1)
+#print(df[["title", "engagement"]].head())
+avg_score = df["score"].mean()
+df["is_popular"] = df["score"] > avg_score
+
+print("Average score:", avg_score)
+#print(df[["title", "score", "is_popular"]].head())
+
+scores = df["score"].values # Define scores array from the 'score' column
+print("Mean score:", np.mean(scores))
+print("Median score:", np.median(scores))
+print("Max score:", np.max(scores))
+
+df.to_csv("data/trends_analysed.csv", index=False)
+print("Saved to data/trends_analysed.csv")
+
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+import numpy as np
+
+# Load the analysed data
+df = pd.read_csv("data/trends_analysed.csv")
+os.makedirs("outputs", exist_ok=True)
+
+# 1. Chart for Top Stories (by score)
+top_stories = df.sort_values("score", ascending=False).head(10)
+# Prepare titles for plotting, shortening if necessary
+plot_titles = [title[:50] + "..." if len(title) > 50 else title for title in top_stories["title"]]
+
+plt.figure(figsize=(10, 6))
+plt.barh(plot_titles, top_stories["score"], color='skyblue') # Using barh for horizontal bars
+plt.xlabel("Score")
+plt.ylabel("Story Title")
+plt.title("Top 10 Stories by Score")
+plt.gca().invert_yaxis() # To have the highest score at the top
+plt.tight_layout()
+plt.savefig("outputs/chart1_top_stories.png")
+plt.close() # Close the figure to free memory
+
+# 2. Chart for Category Distribution
+category_counts = df["category"].value_counts()
+categories = category_counts.index
+counts = category_counts.values
+# A simple list of colors or default matplotlib colors
+your_color_list = plt.get_cmap('tab10', len(categories)) # Using a colormap for distinct colors
+
+plt.figure(figsize=(8, 5))
+plt.bar(categories, counts, color=your_color_list.colors)
+plt.xlabel("Category")
+plt.ylabel("Number of Stories")
+plt.title("Story Distribution by Category")
+plt.tight_layout()
+plt.savefig("outputs/chart2_categories.png")
+plt.close()
+
+# 3. Scatter plot (e.g., Score vs. Number of Comments, colored by category)
+x = df["score"]
+y = df["num_comments"]
+# To get colors based on category, we need to map categories to numerical values for matplotlib
+# Or, use a categorical scatter plot if categories are few
+# For simplicity, let's just make a basic scatter plot for now
+colors = df['category'].astype('category').cat.codes # Map categories to numbers for coloring
+cmap = plt.get_cmap('viridis', len(df['category'].unique())) # Colormap for categories
+
+plt.figure(figsize=(8, 6))
+scatter = plt.scatter(x, y, c=colors, cmap=cmap, alpha=0.7)
+plt.xlabel("Score")
+plt.ylabel("Number of Comments")
+plt.title("Score vs. Number of Comments")
+cbar = plt.colorbar(scatter, ticks=range(len(df['category'].unique())),
+             label='Category')
+cbar.set_ticklabels(df['category'].unique())
+plt.tight_layout()
+plt.savefig("outputs/chart3_scatter.png")
+plt.close()
+
+
+
+print("All charts and dashboard saved in /outputs")
+
+
+
+
+
+
+
+
+
+
