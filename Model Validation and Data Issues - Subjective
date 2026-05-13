@@ -1,0 +1,58 @@
+Problem Framing
+The startup must select the best fraud detection model to minimize total monthly cost, balancing false negatives (missed fraud) and false positives (incorrectly blocked legitimate transactions). The business constraint is asymmetric:
+
+False Negative (FN) cost = ₹50,000 per fraud missed
+False Positive (FP) cost = ₹500 per legitimate transaction blocked
+
+With ~57,000 transactions/month and ~98 actual fraud cases, the decision hinges on precision–recall trade-offs, with recall being critical due to the high cost of missed fraud.
+
+Analysis (with Cost Estimates)
+We estimate counts using:
+
+TP = Recall × 98
+FN = 98 − TP
+FP = TP × (1 / Precision − 1)
+
+
+Model A (No adjustment)
+
+Recall = 63% → TP ≈ 62, FN ≈ 36
+Precision = 82% → FP ≈ 14
+
+Model A cost:
+(14 × 500) + (36 × 50,000)
+= 7,000 + 1,800,000
+= ₹1,807,000
+
+
+Model B (Class-balanced weights)
+
+Recall = 91% → TP ≈ 89, FN ≈ 9
+Precision = 6% → FP ≈ 1,395
+
+Model B cost:
+(1,395 × 500) + (9 × 50,000)
+= 697,500 + 450,000
+= ₹1,147,500
+
+
+Model C (Random undersampling)
+
+Recall = 91% → TP ≈ 89, FN ≈ 9
+Precision = 3% → FP ≈ 2,877
+
+Model C cost:
+(2,877 × 500) + (9 × 50,000)
+= 1,438,500 + 450,000
+= ₹1,888,500
+
+
+Model D (SMOTE 10% ratio)
+
+Recall = 88% → TP ≈ 86, FN ≈ 12
+Precision = 35% → FP ≈ 160
+
+Model D cost:
+(160 × 500) + (12 × 50,000)
+= 80,000 + 600,000
+= ₹680,000
